@@ -1,7 +1,7 @@
 import os
 import base64
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -25,9 +25,15 @@ app.add_middleware(
     allow_origins=['*'],
 )
 
-def encode_image(image_content):
-    return base64.b64encode(image_content).decode("utf-8")
+class ImageResponse(BaseModel):
+    suggestions: str
 
+class ChatbotResponse(BaseModel):
+    response: str
+
+def encode_image(image_file):
+    return base64.b64encode(image_file).decode("utf-8")
+    
 def generate_suggestions(image_base64):
     response = client.chat.completions.create(
         model=MODEL,
@@ -44,32 +50,35 @@ def generate_suggestions(image_base64):
     )
     return response.choices[0].message.content
 
-def rewrite_suggestions(suggestions):
+@app.post("/analyze-rice-leaf", response_model=ImageResponse)
+async def analyze_rice_leaf(file: UploadFile = File(...)):
+    # Read the uploaded file
+    image_data = await file.read()
+    image_base64 = encode_image(image_data)
+    
+    # Get suggestions from OpenAI
+    suggestions = generate_suggestions(image_base64)
+    
+    # Return suggestions as JSON response
+    return JSONResponse(content={"suggestions": suggestions})
+
+def generate_chatbot_response(user_input):
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that helps me with my writing."},
-            {"role": "user", "content": f"Please rewrite the following suggestions: {suggestions}"}
+            {"role": "system", "content": "You are an agriculture expert chatbot that provides advice and information to farmers only. Don't respond to anything outside the context of Agriculture."},
+            {"role": "user", "content": user_input}
         ],
         temperature=0.0,
     )
     return response.choices[0].message.content
 
-@app.post("/analyze-rice-leaf")
-async def analyze_rice_leaf(file: UploadFile = File(...)):
-    try:
-        # Read the uploaded file content
-        image_content = await file.read()
-        image_base64 = encode_image(image_content)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="Error reading image file")
+@app.post("/agriculture-chatbot", response_model=ChatbotResponse)
+async def agriculture_chatbot(query: str = Form(...)):
+    # Get chatbot response from OpenAI
+    chatbot_response = generate_chatbot_response(query)
+    
+    # Return chatbot response as JSON response
+    return JSONResponse(content={"response": chatbot_response})
 
-    # Get suggestions from OpenAI (rice doctor)
-    suggestions = generate_suggestions(image_base64)
-
-    # Rewrite suggestions using OpenAI (writing assistant)
-    rewritten_suggestions = rewrite_suggestions(suggestions)
-
-    # Return rewritten suggestions as plain text response
-    return PlainTextResponse(content=rewritten_suggestions)
-
+# Run the FastAPI app with: uvicorn newton_Api:app --reload
