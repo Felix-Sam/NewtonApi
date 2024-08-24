@@ -41,7 +41,7 @@ def generate_suggestions(image_base64):
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You are a helpful rice doctor that provides suggestions based on images of rice leaves."},
+            {"role": "system", "content": "You are a helpful rice doctor that provides suggestions based on images of rice leaves only.For any other leaves that are not rice don't respond to it."},
             {"role": "user", "content": [
                 {"type": "text", "text": "Please analyze the condition of this rice leaf."},
                 {"type": "image_url", "image_url": {
